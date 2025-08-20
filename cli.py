@@ -250,5 +250,136 @@ def list_brands(category_id):
         db.close()
 
 
+@cli.command()
+@click.argument('html_file')
+def import_categories_html(html_file):
+    """Import categories from HTML file with parent_id from filename"""
+    html_file = 'data/' + html_file
+    import os
+    import re
+    from html.parser import HTMLParser
+
+    db = SessionLocal()
+    try:
+        # Auto-detect parent_id from filename
+        filename = os.path.basename(html_file)
+        # Look for pattern categories_parent_id_XX in filename
+        match = re.search(r'categories_parent_id_(\d+)', filename)
+        if not match:
+            click.echo(f"Error: Could not extract parent_id from filename. Filename must contain 'categories_parent_id_XX' pattern.")
+            return
+
+        parent_id = int(match.group(1))
+        click.echo(f"Auto-detected parent ID {parent_id} from filename")
+
+        # Check if parent category exists
+        parent_category = db.query(Category).filter(Category.id == parent_id).first()
+        if not parent_category:
+            click.echo(f"Error: Parent category with ID {parent_id} not found. Cannot import child categories.")
+            return
+
+        # Read and parse HTML file
+        with open(html_file, 'r', encoding='utf-8') as f:
+            html_content = f.read()
+
+        # Extract categories from HTML
+        class CategoryParser(HTMLParser):
+            def __init__(self):
+                super().__init__()
+                self.categories = []
+                self.current_category = {}
+                self.in_link = False
+                self.in_title = False
+                self.current_href = None
+
+            def handle_starttag(self, tag, attrs):
+                if tag == 'a':
+                    for attr, value in attrs:
+                        if attr == 'href' and '/browse/' in value:
+                            self.in_link = True
+                            self.current_href = value
+                            # Extract category ID and slug from URL
+                            # Format: /browse/94/گوشی-موبایل-mobile/
+                            match = re.search(r'/browse/(\d+)/([^/]+)/', value)
+                            if match:
+                                self.current_category = {
+                                    'id': int(match.group(1)),
+                                    'slug': match.group(2)
+                                }
+                elif tag == 'div' and self.in_link:
+                    for attr, value in attrs:
+                        if attr == 'class' and 'categoryTitle' in value:
+                            self.in_title = True
+
+            def handle_data(self, data):
+                if self.in_title and self.current_category:
+                    self.current_category['title'] = data.strip()
+
+            def handle_endtag(self, tag):
+                if tag == 'a' and self.in_link:
+                    if 'title' in self.current_category:
+                        self.categories.append(self.current_category)
+                    self.current_category = {}
+                    self.in_link = False
+                elif tag == 'div' and self.in_title:
+                    self.in_title = False
+
+        parser = CategoryParser()
+        parser.feed(html_content)
+
+        imported = 0
+
+        for cat_data in parser.categories:
+            existing = db.query(Category).filter(Category.id == cat_data['id']).first()
+
+            # Extract English title from slug
+            # Remove non-English characters and hyphens from the beginning until we reach English characters
+            slug = cat_data['slug']
+            english_title = None
+            
+            # Find the first position where an English letter appears
+            first_english_pos = -1
+            for i, char in enumerate(slug):
+                if char.isalpha() and char.isascii():
+                    first_english_pos = i
+                    break
+            
+            if first_english_pos != -1:
+                # Extract from the first English character to the end
+                english_part = slug[first_english_pos:]
+                # Remove trailing slash if present
+                english_part = english_part.rstrip('/')
+                # Replace hyphens with spaces and capitalize properly
+                english_title = english_part.replace('-', ' ').title()
+            else:
+                # Fallback: use the last part after splitting by hyphen
+                slug_parts = slug.split('-')
+                for i in range(len(slug_parts)-1, -1, -1):
+                    if slug_parts[i] and any(c.isascii() and c.isalpha() for c in slug_parts[i]):
+                        english_title = ' '.join(slug_parts[i:]).replace('-', ' ').title()
+                        break
+
+            if not existing:
+                # Create new category
+                category = Category(
+                    id=cat_data['id'],
+                    title=cat_data['title'],
+                    english_title=english_title,
+                    category_parent_id=parent_id,
+                    is_active=True,
+                    visible=True
+                )
+                db.add(category)
+                imported += 1
+
+        db.commit()
+        click.echo(f"Successfully imported {imported} new child categories under parent ID {parent_id}!")
+
+    except Exception as e:
+        db.rollback()
+        click.echo(f"Error importing categories from HTML: {e}")
+    finally:
+        db.close()
+
 if __name__ == '__main__':
     cli()
