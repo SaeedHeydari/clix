@@ -24,7 +24,7 @@ class Category(Base):
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
 
     # Self-referential relationship for parent-child categories
-    parent = relationship("Category", remote_side=[id], backref="children")
+    #parent = relationship("Category", remote_side=[id], backref="children")
 
 class Brand(Base):
     __tablename__ = "brands"

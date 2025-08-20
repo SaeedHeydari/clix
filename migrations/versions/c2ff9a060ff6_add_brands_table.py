@@ -23,8 +23,10 @@ def upgrade() -> None:
     sa.Column('slug', sa.String(length=255), nullable=False),
     sa.Column('name1', sa.String(length=255), nullable=False),
     sa.Column('name2', sa.String(length=255), nullable=False),
+    sa.Column('category_id', sa.Integer(), nullable=True),
     sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=True),
     sa.Column('updated_at', sa.DateTime(timezone=True), nullable=True),
+    sa.ForeignKeyConstraint(['category_id'], ['categories.id'], ),
     sa.PrimaryKeyConstraint('id')
     )
     op.create_index(op.f('ix_brands_id'), 'brands', ['id'], unique=False)

@@ -3,7 +3,7 @@ import click
 import json
 from sqlalchemy.orm import Session
 from mycli.database import SessionLocal, engine
-from mycli.models import User, Category, Brand, Base
+from mycli.models import Category, Brand, Base
 import alembic.config
 
 @click.group()
@@ -58,11 +58,13 @@ def downgrade():
     click.echo("Database downgraded successfully!")
 
 @cli.command()
-@click.argument('json_file', type=click.Path(exists=True))
+@click.argument('json_file')
 def import_categories(json_file):
     """Import categories from JSON file"""
+    json_file = 'data/' + json_file
     db = SessionLocal()
     try:
+        print("json_file: ", json_file)
         with open(json_file, 'r', encoding='utf-8') as f:
             data = json.load(f)
 
@@ -153,12 +155,23 @@ def tree_categories(parent_id, active_only):
         db.close()
 
 @cli.command()
-@click.argument('json_file', type=click.Path(exists=True))
-@click.option('--category-id', type=int, help='Category ID to associate brands with')
-def import_brands(json_file, category_id):
+@click.argument('json_file')
+def import_brands(json_file):
     """Import brands from JSON file and optionally associate with a category"""
+    json_file = 'data/' + json_file
+    import os
+    import re
+
     db = SessionLocal()
     try:
+        # Auto-detect category_id from filename if not provided
+        filename = os.path.basename(json_file)
+        # Look for pattern cat_id_XX in filename
+        match = re.search(r'brands_cat_id_(\d+)', filename)
+        if match:
+            category_id = int(match.group(1))
+            click.echo(f"Auto-detected category ID {category_id} from filename")
+
         # Check if category exists when category_id is provided
         if category_id:
             category = db.query(Category).filter(Category.id == category_id).first()
