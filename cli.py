@@ -3,7 +3,7 @@ import click
 import json
 from sqlalchemy.orm import Session
 from mycli.database import SessionLocal, engine
-from mycli.models import User, Category, Base
+from mycli.models import User, Category, Brand, Base
 import alembic.config
 
 @click.group()
@@ -207,6 +207,91 @@ def tree_categories(parent_id, active_only):
             print_tree(cat)
     finally:
         db.close()
+
+@cli.command()
+@click.argument('json_file', type=click.Path(exists=True))
+@click.option('--category-id', type=int, help='Category ID to associate brands with')
+def import_brands(json_file, category_id):
+    """Import brands from JSON file and optionally associate with a category"""
+    db = SessionLocal()
+    try:
+        # Check if category exists when category_id is provided
+        if category_id:
+            category = db.query(Category).filter(Category.id == category_id).first()
+            if not category:
+                click.echo(f"Category with ID {category_id} not found.")
+                return
+        
+        with open(json_file, 'r', encoding='utf-8') as f:
+            brands_data = json.load(f)
+        
+        imported = 0
+        updated = 0
+        
+        for brand_data in brands_data:
+            # Skip the "not detected" brand with id -1
+            if brand_data['id'] == -1:
+                continue
+                
+            existing = db.query(Brand).filter(Brand.id == brand_data['id']).first()
+            if existing:
+                # Update existing brand
+                existing.slug = brand_data['slug']
+                existing.name1 = brand_data['name1']
+                existing.name2 = brand_data['name2']
+                if category_id:
+                    existing.category_id = category_id
+                updated += 1
+            else:
+                # Create new brand
+                brand = Brand(
+                    id=brand_data['id'],
+                    slug=brand_data['slug'],
+                    name1=brand_data['name1'],
+                    name2=brand_data['name2'],
+                    category_id=category_id if category_id else None
+                )
+                db.add(brand)
+                imported += 1
+        
+        db.commit()
+        if category_id:
+            click.echo(f"Imported {imported} new brands and updated {updated} existing brands, associated with category ID {category_id}!")
+        else:
+            click.echo(f"Imported {imported} new brands and updated {updated} existing brands successfully!")
+        
+    except Exception as e:
+        db.rollback()
+        click.echo(f"Error importing brands: {e}")
+    finally:
+        db.close()
+
+@cli.command()
+@click.option('--category-id', type=int, help='Filter brands by category ID')
+def list_brands(category_id):
+    """List all brands, optionally filtered by category"""
+    db = SessionLocal()
+    try:
+        query = db.query(Brand)
+        if category_id:
+            query = query.filter(Brand.category_id == category_id)
+        
+        brands = query.order_by(Brand.name2).all()
+        if not brands:
+            if category_id:
+                click.echo(f"No brands found for category ID {category_id}.")
+            else:
+                click.echo("No brands found.")
+            return
+        
+        click.echo("\nBrands:")
+        click.echo("-" * 100)
+        for brand in brands:
+            cat_info = f" | Category: {brand.category.title if brand.category else 'None'}"
+            click.echo(f"ID: {brand.id} | English: {brand.name2} | Persian: {brand.name1}{cat_info}")
+    finally:
+        db.close()
+
 
 if __name__ == '__main__':
     cli()

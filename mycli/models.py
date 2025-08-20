@@ -3,17 +3,6 @@ from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
 from .database import Base
 
-class User(Base):
-    __tablename__ = "users"
-
-    id = Column(Integer, primary_key=True, index=True)
-    username = Column(String(50), unique=True, index=True, nullable=False)
-    email = Column(String(100), unique=True, index=True, nullable=False)
-    full_name = Column(String(100))
-    is_active = Column(Boolean, default=True)
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
-
 class Category(Base):
     __tablename__ = "categories"
 
@@ -33,6 +22,20 @@ class Category(Base):
     absolute_url = Column(String(500))
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
-    
+
     # Self-referential relationship for parent-child categories
     parent = relationship("Category", remote_side=[id], backref="children")
+
+class Brand(Base):
+    __tablename__ = "brands"
+
+    id = Column(Integer, primary_key=True, index=True)
+    slug = Column(String(255), unique=True, nullable=False, index=True)
+    name1 = Column(String(255), nullable=False)  # Persian name
+    name2 = Column(String(255), nullable=False)  # English name
+    category_id = Column(Integer, ForeignKey('categories.id'), nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+
+    # Relationship to Category
+    category = relationship("Category", backref="brands")

@@ -2,6 +2,7 @@
 
 ## Project Name
 ToroBX CLI (Python CLI with MySQL Database and Migrations)
+project is in a virtual environment
 
 ## Repository
 - **URL**: https://github.com/SaeedHeydari/clix.git
