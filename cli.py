@@ -25,62 +25,6 @@ def drop_db():
         click.echo("All tables dropped!")
 
 @cli.command()
-@click.option('--username', prompt=True, help='Username for the new user')
-@click.option('--email', prompt=True, help='Email for the new user')
-@click.option('--full-name', prompt=True, help='Full name for the new user')
-def create_user(username, email, full_name):
-    """Create a new user"""
-    db = SessionLocal()
-    try:
-        user = User(username=username, email=email, full_name=full_name)
-        db.add(user)
-        db.commit()
-        click.echo(f"User '{username}' created successfully!")
-    except Exception as e:
-        db.rollback()
-        click.echo(f"Error creating user: {e}")
-    finally:
-        db.close()
-
-@cli.command()
-def list_users():
-    """List all users"""
-    db = SessionLocal()
-    try:
-        users = db.query(User).all()
-        if not users:
-            click.echo("No users found.")
-            return
-        
-        click.echo("\nUsers:")
-        click.echo("-" * 80)
-        for user in users:
-            click.echo(f"ID: {user.id} | Username: {user.username} | Email: {user.email} | Active: {user.is_active}")
-    finally:
-        db.close()
-
-@cli.command()
-@click.argument('username')
-def delete_user(username):
-    """Delete a user by username"""
-    db = SessionLocal()
-    try:
-        user = db.query(User).filter(User.username == username).first()
-        if not user:
-            click.echo(f"User '{username}' not found.")
-            return
-        
-        if click.confirm(f"Are you sure you want to delete user '{username}'?"):
-            db.delete(user)
-            db.commit()
-            click.echo(f"User '{username}' deleted successfully!")
-    except Exception as e:
-        db.rollback()
-        click.echo(f"Error deleting user: {e}")
-    finally:
-        db.close()
-
-@cli.command()
 @click.argument('message')
 def migrate(message):
     """Create a new migration"""
@@ -121,10 +65,10 @@ def import_categories(json_file):
     try:
         with open(json_file, 'r', encoding='utf-8') as f:
             data = json.load(f)
-        
+
         categories = data.get('results', [])
         imported = 0
-        
+
         # First pass: Create all categories without parent relationships
         for cat_data in categories:
             existing = db.query(Category).filter(Category.id == cat_data['id']).first()
@@ -146,19 +90,19 @@ def import_categories(json_file):
                 )
                 db.add(category)
                 imported += 1
-        
+
         db.commit()
-        
+
         # Second pass: Update parent relationships
         for cat_data in categories:
             if cat_data.get('category_parent'):
                 category = db.query(Category).filter(Category.id == cat_data['id']).first()
                 if category:
                     category.category_parent_id = cat_data['category_parent']
-        
+
         db.commit()
         click.echo(f"Imported {imported} categories successfully!")
-        
+
     except Exception as e:
         db.rollback()
         click.echo(f"Error importing categories: {e}")
@@ -174,7 +118,7 @@ def list_categories():
         if not categories:
             click.echo("No categories found.")
             return
-        
+
         click.echo("\nCategories:")
         click.echo("-" * 100)
         for cat in categories:
@@ -197,12 +141,12 @@ def tree_categories(parent_id, active_only):
             click.echo(f"{indent}{category.title} (ID: {category.id})")
             for child in sorted(category.children, key=lambda x: (x.order, x.id)):
                 print_tree(child, level + 1)
-        
+
         if parent_id:
             root_cats = db.query(Category).filter(Category.id == parent_id).all()
         else:
             root_cats = db.query(Category).filter(Category.category_parent_id == None).order_by(Category.order, Category.id).all()
-        
+
         for cat in root_cats:
             print_tree(cat)
     finally:
@@ -221,18 +165,18 @@ def import_brands(json_file, category_id):
             if not category:
                 click.echo(f"Category with ID {category_id} not found.")
                 return
-        
+
         with open(json_file, 'r', encoding='utf-8') as f:
             brands_data = json.load(f)
-        
+
         imported = 0
         updated = 0
-        
+
         for brand_data in brands_data:
             # Skip the "not detected" brand with id -1
             if brand_data['id'] == -1:
                 continue
-                
+
             existing = db.query(Brand).filter(Brand.id == brand_data['id']).first()
             if existing:
                 # Update existing brand
@@ -253,13 +197,13 @@ def import_brands(json_file, category_id):
                 )
                 db.add(brand)
                 imported += 1
-        
+
         db.commit()
         if category_id:
             click.echo(f"Imported {imported} new brands and updated {updated} existing brands, associated with category ID {category_id}!")
         else:
             click.echo(f"Imported {imported} new brands and updated {updated} existing brands successfully!")
-        
+
     except Exception as e:
         db.rollback()
         click.echo(f"Error importing brands: {e}")
@@ -275,7 +219,7 @@ def list_brands(category_id):
         query = db.query(Brand)
         if category_id:
             query = query.filter(Brand.category_id == category_id)
-        
+
         brands = query.order_by(Brand.name2).all()
         if not brands:
             if category_id:
@@ -283,7 +227,7 @@ def list_brands(category_id):
             else:
                 click.echo("No brands found.")
             return
-        
+
         click.echo("\nBrands:")
         click.echo("-" * 100)
         for brand in brands:
